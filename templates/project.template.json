@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "account": {
+    "name": "Example Account",
+    "slug": "example-account",
+    "tone": "Clear, audience-appropriate, and fact-aware"
+  },
+  "modules": {
+    "local_intake": true,
+    "feishu": false,
+    "content_analysis": true,
+    "jianying": false
+  },
+  "feishu": {
+    "base_token": "${FEISHU_BASE_TOKEN}",
+    "table_id": "${FEISHU_TABLE_ID}",
+    "identity": "user",
+    "fields": {
+      "primary": "Title",
+      "video": "Video",
+      "creator": "Creator",
+      "source_url": "Source URL",
+      "source_platform": "Source Platform",
+      "status": "Status"
+    }
+  },
+  "taxonomy": {
+    "video_categories": ["Education", "Entertainment"],
+    "audiences": [],
+    "topic_tags": []
+  },
+  "paths": {
+    "video_root": "videos",
+    "work_root": "work",
+    "jianying_skill": "${JY_SKILL_ROOT}",
+    "preset_root": "${JY_PRESET_ROOT}"
+  },
+  "draft": {
+    "width": 1080,
+    "height": 1920,
+    "generator_script": "scripts/create_jianying_drafts.py",
+    "style_verified": false,
+    "style_reference": {
+      "application_mode": "verified_profile_reproduction",
+      "name": "local-verified-profile",
+      "path": "${JY_STYLE_PROFILE}",
+      "protected": true,
+      "encrypted_source": false
+    },
+    "name_template": "{account}_{date}_{slug}_{status}",
+    "status": "ready",
+    "overwrite": false,
+    "endcard": false,
+    "subtitle": {
+      "preset_number": 1,
+      "font_name": "system",
+      "font_resource_id": null,
+      "size": 8,
+      "size_offset": 0,
+      "track_name": "Subtitles"
+    },
+    "creator_credit": {
+      "preset_number": 2,
+      "font_name": "system",
+      "font_resource_id": null,
+      "size": 6,
+      "size_offset": 0,
+      "track_name": "CreatorCredit"
+    }
+  }
+}
+

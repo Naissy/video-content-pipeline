@@ -1,0 +1,5 @@
+interface:
+  display_name: Video Content Pipeline
+  short_description: Configurable, safe short-video batch workflow
+  default_prompt: Use $video-content-pipeline to plan or run this video batch from its project.json configuration.
+
