@@ -18,6 +18,10 @@ def main():
     stages = ["validate"]
     if modules.get("local_intake"):
         stages.append("local_intake_and_match")
+    if modules.get("xiaohongshu_research"):
+        if "xiaohongshu" not in config:
+            raise ValueError("xiaohongshu configuration is required when modules.xiaohongshu_research is enabled")
+        stages.append("xiaohongshu_creator_buddy_research")
     if modules.get("content_analysis"):
         stages.append("content_analysis")
     if modules.get("feishu"):
@@ -37,4 +41,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

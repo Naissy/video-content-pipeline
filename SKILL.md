@@ -15,9 +15,10 @@ Read [references/config-schema.md](references/config-schema.md) when configuring
 2. If `modules.feishu` is enabled, obtain only the target records and required fields. Otherwise use a local JSON record list.
 3. Match records to files with `scripts/match_videos.py`. Continue only for unique one-to-one matches.
 4. Use the analysis helpers only when needed: caption-boundary detection, transition detection, contact sheets, or local Whisper refinement. Their boundaries and prompts must come from input JSON, never from embedded examples.
-5. Generate captions and publishing copy according to `account.tone` and `taxonomy`. Keep uncertain classifications empty and route unclear transcripts to human review.
-6. Treat Feishu upload and Jianying delivery as independent optional steps. Both default to dry-run and require explicit `--execute`.
-7. Report every matched, unmatched, ambiguous, skipped, failed, executed, and unverified item.
+5. When `modules.xiaohongshu_research` is enabled, read [the Xiaohongshu content workflow](references/xiaohongshu-content.md) and invoke `$creator-buddy` before writing publishing copy. Creator Buddy supplies read-only market evidence and reusable patterns; it does not write the final post.
+6. Generate captions and publishing copy from the source video, `account.tone`, `taxonomy`, and the verified Creator Buddy research context. Keep uncertain classifications empty and route unclear transcripts to human review.
+7. Treat Feishu upload and Jianying delivery as independent optional steps. Both default to dry-run and require explicit `--execute`.
+8. Report every matched, unmatched, ambiguous, skipped, failed, executed, and unverified item.
 
 ## Safety invariants
 
@@ -27,6 +28,7 @@ Read [references/config-schema.md](references/config-schema.md) when configuring
 - Never overwrite an existing draft. Missing fonts, presets, verified style profiles, applications, or dependencies are blocking errors.
 - An encrypted or manually adjusted draft may prove provenance, but must not be parsed, copied, edited, or published. Reproduce only a separately verified numeric profile.
 - Keep `--dry-run` as the default. External writes and formal draft generation require `--execute` immediately before the action.
+- Creator Buddy is a read-only research dependency. If it or its Xiaohongshu backend is unavailable, mark research as unavailable and clearly label any content-only fallback; never invent trend or engagement data.
 
 ## Tools
 
@@ -38,4 +40,3 @@ Read [references/config-schema.md](references/config-schema.md) when configuring
 - `detect_major_transitions.py`: find visual cuts near configured times.
 - `make_boundary_sheets.py`: create configured frame-review sheets.
 - `refine_whisper_segments.py`: re-transcribe configured ambiguous audio regions with local whisper.cpp.
-

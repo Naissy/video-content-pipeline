@@ -61,6 +61,7 @@ cp ~/.codex/skills/video-content-pipeline/templates/project.template.json projec
     "local_intake": true,
     "feishu": false,
     "content_analysis": true,
+    "xiaohongshu_research": false,
     "jianying": false
   }
 }
@@ -148,14 +149,44 @@ python3 ~/.codex/skills/video-content-pipeline/scripts/match_videos.py \
 
 ## 6. 内容分析与字幕准备
 
-内容生成由 Codex 根据 `account.tone` 和 `taxonomy` 完成。推荐给 Codex 的任务描述：
+内容生成由 Codex 根据原视频、`account.tone` 和 `taxonomy` 完成。如果要生成更贴合近期小红书语境的标题、正文和 Tag，启用 Creator Buddy 调研模块：
+
+```json
+{
+  "modules": {
+    "content_analysis": true,
+    "xiaohongshu_research": true
+  },
+  "xiaohongshu": {
+    "research_skill": "creator-buddy",
+    "lookback_days": 30,
+    "search_limit": 20,
+    "title_count": 10,
+    "tag_count": 10,
+    "human_review_before_sync": true
+  }
+}
+```
+
+这一阶段采用两步链路：
+
+1. `$creator-buddy` 只读搜索近期热门笔记，输出互动信号、关键词、标题公式、受众痛点和可借鉴结构。
+2. `$video-content-pipeline` 再结合原视频和账号配置，生成原创的小红书标题、正文和 Tag。
+
+推荐给 Codex 的完整任务描述：
 
 ```text
 使用 $video-content-pipeline 分析 work/match-manifest.json 中的 matched 视频。
-为每条视频输出原字幕、中文化字幕、内容简介、标题、正文、Tag、分类和受众。
+项目启用了 xiaohongshu_research：先调用 $creator-buddy，以小红书为平台，
+根据视频主题搜索最近 30 天的热门笔记，提取关键词、标题公式、受众痛点和内容结构，
+并保存带来源链接的 research_context。不要照抄原文，也不要编造不可用的热度数据。
+然后结合原视频、account.tone、taxonomy 和 research_context，为每条视频输出：
+原字幕、中文化字幕、内容简介、10 个标题候选、1 个推荐标题、正文、最多 10 个 Tag、分类和受众。
 分类只能从 project.json 的 taxonomy 中选择；听不清的字幕进入人工校对，不要猜。
-先把结果写入新的 work/batch-content.json，不执行飞书同步或剪映生成。
+先把结果写入新的 work/batch-content.json，等待人工确认，不执行飞书同步或剪映生成。
 ```
+
+如果 `$creator-buddy` 或小红书搜索后端不可用，必须把 `research_status` 标记为 `unavailable`，并将结果注明为 `content_only_fallback`，不能声称标题经过热点验证。详细数据结构和生成规则见 [`references/xiaohongshu-content.md`](references/xiaohongshu-content.md)。
 
 准备剪映草稿时，每条视频还需要：
 
