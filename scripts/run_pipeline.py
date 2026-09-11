@@ -16,6 +16,10 @@ def main():
     config = load_config(args.config, resolve_modules=bool(args.execute))
     modules = config["modules"]
     stages = ["validate"]
+    if modules.get("instagram_intake"):
+        if "instagram" not in config:
+            raise ValueError("instagram configuration is required when modules.instagram_intake is enabled")
+        stages.append("instagram_public_download")
     if modules.get("local_intake"):
         stages.append("local_intake_and_match")
     if modules.get("xiaohongshu_research"):

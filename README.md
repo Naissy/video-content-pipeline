@@ -4,6 +4,27 @@
 
 > 安全原则：默认只做 dry-run。飞书上传和剪映草稿生成必须显式传入 `--execute`。
 
+## 最快用法：直接给 Instagram 链接
+
+安装并配置一次后，可以直接在 Codex 中输入：
+
+```text
+使用 $video-content-pipeline 处理这些公开 Instagram 视频：
+https://www.instagram.com/reel/EXAMPLE_A/
+https://www.instagram.com/p/EXAMPLE_B/
+
+自动下载、生成中文字幕和小红书文案，并为每条视频生成独立剪映草稿。
+这次不同步飞书。先给我 dry-run 结果，确认后执行。
+```
+
+需要飞书时把最后一句改成：
+
+```text
+完成草稿后同步飞书；按来源 URL 更新已有记录，不存在时创建，重复记录则停止该条。
+```
+
+内部流程是：链接规范化与去重 → `yt-dlp` 下载 → 转写与中文字幕 → 可选 Creator Buddy 调研 → 小红书标题/正文/Tag → 剪映草稿 → 可选飞书同步。受平台限制、字幕不清、样式依赖缺失的条目会单独停止，不影响其他已通过检查的链接。
+
 ## 你可以用它做什么
 
 - 按创作者名称，把任务记录与本地视频做一对一匹配。
@@ -58,6 +79,7 @@ cp ~/.codex/skills/video-content-pipeline/templates/project.template.json projec
 ```json
 {
   "modules": {
+    "instagram_intake": true,
     "local_intake": true,
     "feishu": false,
     "content_analysis": true,
@@ -66,6 +88,46 @@ cp ~/.codex/skills/video-content-pipeline/templates/project.template.json projec
   }
 }
 ```
+
+Instagram 下载还需要保留以下默认设置：
+
+```json
+{
+  "instagram": {
+    "downloader": "yt-dlp",
+    "public_only": true,
+    "max_urls_per_batch": 20,
+    "timeout_seconds_per_url": 120
+  }
+}
+```
+
+本 Skill 不会自动安装 `yt-dlp`。运行前可用 `yt-dlp --version` 检查；缺失时应停止，并由用户自行选择安装方式。
+
+### 命令行下载一个或多个链接
+
+先 dry-run：
+
+```bash
+python3 ~/.codex/skills/video-content-pipeline/scripts/run_instagram_pipeline.py \
+  --config project.json \
+  --url "https://www.instagram.com/reel/EXAMPLE_A/" \
+  --url "https://www.instagram.com/p/EXAMPLE_B/" \
+  --manifest work/instagram-ingest.json \
+  --dry-run
+```
+
+确认后下载并写入 intake manifest：
+
+```bash
+python3 ~/.codex/skills/video-content-pipeline/scripts/run_instagram_pipeline.py \
+  --config project.json \
+  --url-file instagram-urls.txt \
+  --manifest work/instagram-ingest.json \
+  --execute
+```
+
+`instagram-urls.txt` 每行一个链接，空行和以 `#` 开头的说明会被忽略。仅接受公开的 `/reel/`、`/p/` 和 `/tv/` 内容链接，不读取浏览器 cookies，也不处理个人主页链接。
 
 然后按项目修改这些内容：
 

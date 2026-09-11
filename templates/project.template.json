@@ -6,11 +6,18 @@
     "tone": "Clear, audience-appropriate, and fact-aware"
   },
   "modules": {
+    "instagram_intake": true,
     "local_intake": true,
     "feishu": false,
     "content_analysis": true,
     "xiaohongshu_research": false,
     "jianying": false
+  },
+  "instagram": {
+    "downloader": "yt-dlp",
+    "public_only": true,
+    "max_urls_per_batch": 20,
+    "timeout_seconds_per_url": 120
   },
   "xiaohongshu": {
     "research_skill": "creator-buddy",
@@ -40,6 +47,7 @@
   },
   "paths": {
     "video_root": "videos",
+    "download_root": "videos/instagram",
     "work_root": "work",
     "jianying_skill": "${JY_SKILL_ROOT}",
     "preset_root": "${JY_PRESET_ROOT}"
