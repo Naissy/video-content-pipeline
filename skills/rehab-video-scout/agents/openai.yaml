@@ -1,6 +1,6 @@
 interface:
   display_name: "通用视频选材"
-  short_description: "先确认账号定位与内容，再找近期热点，仅选原帖点赞严格大于一万的视频"
-  default_prompt: "使用 $rehab-video-scout，先询问我的账号定位、受众与内容需求，再寻找近期热点视频，只选核实点赞严格大于 10000 的原帖。"
+  short_description: "先了解账号，再核验近期爆款；点赞门槛可选，潜力素材单独列出"
+  default_prompt: "使用 $rehab-video-scout，先确认我的账号定位、内容和筛选偏好，再寻找有可靠热度依据的近期爆款，最低点赞由我选择。"
 policy:
   allow_implicit_invocation: true

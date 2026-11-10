@@ -18,6 +18,8 @@
   },
   "discovery": {
     "brief_confirmed": false,
+    "selection_mode": "proven",
+    "min_likes_exclusive": null,
     "source_platform": "instagram",
     "destination_platform": "xiaohongshu",
     "content_language": "zh-CN",

@@ -1,6 +1,6 @@
 ---
 name: video-content-pipeline
-description: Discover recent videos after confirming any account's positioning and content brief, then route verified selections, public Instagram links, or local media through downloading, faithful subtitles, publishing copy, Jianying drafts, and final-output checks. Use for end-to-end single or batch video production with optional Creator Buddy and Feishu; discovery requires original-post likes strictly greater than 10000.
+description: Discover evidence-backed recent breakout videos after confirming any account's brief, with an optional minimum-likes filter, then route selections or user-supplied media through downloading, faithful subtitles, publishing copy, Jianying drafts, and final-output checks. Use for single or batch video production with optional Creator Buddy and Feishu; keep potential candidates separate.
 ---
 
 # Video Content Pipeline
@@ -13,7 +13,7 @@ Read [references/config-schema.md](references/config-schema.md) when configuring
 
 0. If the user needs video discovery, read [the bundled rehab-video-scout skill](skills/rehab-video-scout/SKILL.md) in full and [the discovery handoff](references/video-scout.md). Ask the four onboarding questions there, reusing known answers; do not search until the account and content brief are confirmed. Enable `modules.video_scout` for this project. No industry or account is assumed. When the user already supplied explicit links or local files and did not request discovery, preserve the existing direct-intake path.
 1. Validate configuration with `scripts/run_pipeline.py --config <path> --dry-run`.
-2. Read [the Instagram workflow](references/instagram-workflow.md). For discovery, verify recent candidates against the confirmed brief and exact original-post likes > 10000, then generate a selection manifest using `select_video_candidates.py`. Pass it to `run_instagram_pipeline.py --selection-manifest`; do not strip evidence into a bare URL list. For direct intake, normalize supplied `/reel/`, `/reels/`, `/p/`, or `/tv/` links. Dry-run the batch, then download only when authorized. A request to find videos alone ends at recommendations, without downloads or other writes.
+2. Read [the Instagram workflow](references/instagram-workflow.md). For discovery, verify recent candidates against the brief, reliable heat evidence, and any user-enabled minimum-likes filter. Generate a selection manifest using `select_video_candidates.py` and pass it to `run_instagram_pipeline.py --selection-manifest`; preserve evidence. Default to proven recent breakouts; enabled potential candidates remain separate and are not automatically downloaded. For explicitly user-supplied links use `--direct-input` with normalized `/reel/`, `/reels/`, `/p/`, or `/tv/` URLs, regardless of discovery settings. Dry-run the batch, then execute when authorized; do not re-ask for an already authorized scope. A request to find videos alone ends at recommendations.
 3. For local-only input, match records to files with `scripts/match_videos.py`. Continue only for unique one-to-one matches.
 4. Transcribe each downloaded video, create faithful Chinese subtitles, and use the analysis helpers only when needed. Keep uncertain speech in human review instead of guessing.
 5. When `modules.xiaohongshu_research` is enabled, read [the Xiaohongshu content workflow](references/xiaohongshu-content.md) and invoke `$creator-buddy` before writing publishing copy. Creator Buddy supplies read-only market evidence and reusable patterns; it does not write the final post.
@@ -34,7 +34,7 @@ Read [references/config-schema.md](references/config-schema.md) when configuring
 - Creator Buddy is a read-only research dependency. If it or its Xiaohongshu backend is unavailable, mark research as unavailable and clearly label any content-only fallback; never invent trend or engagement data.
 - Do not read browser cookies, accept cookie files, automate login, or bypass Instagram access controls. If a public link cannot be downloaded, fail that item with the downloader's concise reason.
 - Normalize Instagram links and deduplicate by shortcode across `/p/`, `/reel/`, and `/reels/` before downloads. Never overwrite an existing download.
-- Discovery requires a confirmed account brief and fresh primary-source evidence of exact likes strictly greater than 10000. Never substitute views or relax the threshold to fill a quota. Do not disable scout mode to bypass this gate; direct intake is a separate user-requested workflow.
+- Discovery requires a confirmed brief, recent publication and fresh primary-source heat evidence plus a sourced assessment. Minimum likes are optional (`discovery.min_likes_exclusive=null` by default). When enabled, the exact original-post count must exceed that number; views cannot substitute. Never relax enabled filters to fill a quota or mislabel agent-discovered items as user-provided input. Direct intake is a separate, explicitly user-requested workflow.
 - High likes do not establish factual accuracy, reuse permission, or likely future virality. Keep provenance and attribution, flag rights questions, and do not publish without authorization.
 
 ## Tools

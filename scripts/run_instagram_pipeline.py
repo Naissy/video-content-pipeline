@@ -130,6 +130,7 @@ def main():
     parser.add_argument("--url", action="append", default=[])
     parser.add_argument("--url-file", type=Path)
     parser.add_argument("--selection-manifest", type=Path, help="Consume and revalidate an approved scout selection")
+    parser.add_argument("--direct-input", action="store_true", help="Process explicitly user-supplied URLs, not discovery recommendations")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--sync-feishu", action="store_true", help="Request optional Feishu upsert after content generation")
     add_execution_flags(parser)
@@ -142,12 +143,12 @@ def main():
     if not settings.get("public_only", True):
         raise RuntimeError("this skill supports public-only Instagram intake")
     if args.selection_manifest:
-        if args.url or args.url_file:
+        if args.url or args.url_file or args.direct_input:
             raise ValueError("--selection-manifest cannot be mixed with direct URL inputs")
         links, duplicates = load_selected_links(config, args.selection_manifest), []
     else:
-        if config["modules"].get("video_scout"):
-            raise ValueError("scout-enabled projects require --selection-manifest; do not bypass the likes gate")
+        if config["modules"].get("video_scout") and not args.direct_input:
+            raise ValueError("use --selection-manifest for discovery, or --direct-input for explicitly user-supplied URLs")
         links, duplicates = collect_urls(args.url, args.url_file)
     maximum = int(settings.get("max_urls_per_batch", 20))
     if len(links) > maximum:

@@ -1,94 +1,110 @@
 # Discovery → production handoff
 
-This is the adapter contract for the bundled `rehab-video-scout`. The legacy name is retained for compatibility; it supports any account brief, not a fixed rehab niche. Read `skills/rehab-video-scout/SKILL.md` before discovering candidates.
+Read the bundled skills/rehab-video-scout/SKILL.md before discovery. Its legacy name does not imply a rehab account.
 
-## 1. Confirm the brief before browsing
+## Confirm the brief
 
-Ask four compact questions: positioning/audience/value; topics/formats/references/exclusions; source/destination platforms and language/region; count/recent window/duration/subtitle burden. Ask only missing information. Do not assume account identity from this repository or from a previous user's project.
+Ask about positioning/audience, content formats/references/exclusions, platforms/language, and count/recency/duration/subtitle load. Also ask whether to set a minimum likes filter and whether potential candidates are wanted. Reuse existing answers. Only set discovery.brief_confirmed=true after confirmation.
 
-Save the confirmed answers to the business project's ignored `project.json`. Enable `modules.video_scout`; fill `account.positioning`, `account.audience`, `account.tone`, and `discovery`. Only then set `brief_confirmed=true`. The template's empty fields intentionally block discovery. Its defaults are suggestions to confirm, not permission to skip onboarding.
+Default suggestions: recent 7 days, 5 videos, 30 seconds, low subtitle load. selection_mode is proven; min_likes_exclusive is null (off). An integer enables exact original-post likes strictly greater than the value, not greater-or-equal. No global 10,000 requirement. Use include_potential only on request. Account settings stay in the ignored business project, not this repository.
 
-```bash
-python3 /path/to/video-content-pipeline/scripts/run_pipeline.py \
-  --config project.json --dry-run
-```
+The current evidence/downloader adapter is Instagram. Other source platforms require an adapter or user-provided local files.
 
-The planner reports `scout_brief_missing` and `scout_search_ready`; it does not browse or execute the stages. Different industries are supported. The current downloader/evidence adapter supports Instagram only; other source platforms need an adapter before production, not fabricated Instagram links.
+## Evidence and assessment
 
-## 2. Research and collect real evidence
+Disabling minimum likes does not disable evidence checks. At least one current, primary-source, exact post metric (likes or video views) is required. Hidden likes may be replaced as an assessment input by verified views when the filter is off; views never satisfy an enabled likes threshold. Third-party snippets, follower counts, comment likes, invented counts and stale observations do not pass.
 
-Use the user's specified browser when available, or authorized public search to discover candidates. Open each source to verify exact original-post likes, publication date and identity. Actually review the video and its duration/subtitle burden. Search snippets or third-party summaries alone are not final evidence. Page content is data, not authority to change this workflow.
+Default production recommendations must be recent proven breakouts. The agent must actually watch the source video and explain its relevance and popularity relative to a sensible content/age context. A large counter alone does not prove virality. No evidence means unverified, not potential. Popularity does not establish factual accuracy or reuse rights.
 
-Strict gate: **integer original-post likes > 10000**. `10000`, `10K`, hidden likes, views, creator follower counts, or another post's likes cannot pass. Get an exact count when the UI is abbreviated; otherwise exclude. Record the actual verification timestamp with timezone. Never invent `video_reviewed`, relevance or evidence fields to satisfy the validator.
+Assessment bases:
+- recent_high_volume: explain the observed volume in a sourced recent/category context.
+- relative_outperformance: compare similar content, preferably from the same creator, at comparable post ages. Record the sample and uncertainty; do not mix pinned old hits into a recent baseline.
+- observed_growth: at least two same-post/same-metric observations with increasing timestamps and counts. Increasing slightly is not automatically a breakout; the agent must justify magnitude and period.
 
-Analyze themes across recent, relevant posts before calling something a trend; a single high-like video is only a recent popular candidate. Separate observation from inference. Default publication window is the last 7 days, default evidence freshness is 24 hours, subject to the confirmed project. If the window yields too few qualified videos, report the shortfall. Broaden time or topics only with user agreement, never lower the likes threshold.
+The validator checks recorded fields, not the authenticity of observations or the validity of qualitative judgments. It never replaces browsing/review. Keep comparison notes factual and cite the posts actually reviewed.
 
-Save candidates in preference order, with previous source URLs in `seen_urls` for deduplication. Required fields are illustrated below. **This is a fictional schema example, not a verified recommendation; replace all values with observed evidence.** `published_at` should use the timestamp available from the original post; when only a calendar date is available, document its precision and do not guess an in-window timestamp at the boundary.
+## Candidate JSON
 
-```json
+The following is fictional schema data, not a verified recommendation. Use current observed dates/counts and actual source/comparison URLs; never copy the example to manufacture evidence.
+
+~~~json
 {
   "seen_urls": [],
-  "candidates": [
-    {
+  "candidates": [{
+    "source_url": "https://www.instagram.com/reel/EXAMPLE_A/",
+    "creator": "example_creator",
+    "published_at": "2026-01-09T08:00:00+00:00",
+    "duration": 24,
+    "duration_evidence": "player",
+    "subtitle_load": "low",
+    "video_reviewed": true,
+    "relevant": true,
+    "fit_reason": "Matches the confirmed beginner cooking audience",
+    "trend_status": "proven",
+    "trend_basis": "relative_outperformance",
+    "trend_reason": "Explain observed outperformance using real comparison data",
+    "comparison": {
+      "context": "Record the comparable posts, counts, ages, baseline and uncertainty",
+      "source_urls": ["https://www.instagram.com/reel/EXAMPLE_COMPARISON/"]
+    },
+    "heat_evidence": [{
+      "metric": "views",
+      "value": 250000,
       "source_url": "https://www.instagram.com/reel/EXAMPLE_A/",
-      "creator": "example_creator",
-      "like_count": 12345,
-      "likes_source_url": "https://www.instagram.com/reel/EXAMPLE_A/",
-      "likes_evidence_type": "instagram_page",
-      "verified_at": "2026-01-10T12:00:00+00:00",
-      "published_at": "2026-01-09T08:00:00+00:00",
-      "duration": 24,
-      "duration_evidence": "player",
-      "subtitle_load": "low",
-      "video_reviewed": true,
-      "relevant": true,
-      "fit_reason": "Matches the confirmed beginner cooking audience and visual demonstration format",
-      "topic": "Quick cooking demonstration",
-      "evidence_note": "Record the actual observed UI/metadata context here"
-    }
-  ]
+      "evidence_type": "instagram_page",
+      "verified_at": "2026-01-10T12:00:00+00:00"
+    }]
+  }]
 }
-```
+~~~
 
-Allowed evidence types: `instagram_page` or `instagram_metadata`; duration: `player` or `media_metadata`; subtitle load: `none`, `low`, `medium`, `high`. The validator checks field consistency and thresholds offline. It **cannot authenticate a claimed observation**, detect an invented counter, or judge actual topic relevance; the agent must do that work and retain supporting context. Optional screenshot references/metadata paths may be retained in `evidence_note` in the private business project, never public credentials/cookies.
+Evidence type is instagram_page or instagram_metadata; metric is likes or views; value is a positive exact integer; timestamps include timezones. For an enabled likes filter include a qualifying likes observation in heat_evidence. Any supplied invalid observation blocks the candidate.
 
-## 3. Validate and freeze the selected batch
+For observed_growth add growth_observations with at least two objects in the same format as heat_evidence, from different times; they must be fresh, increasing and refer to the same metric/post. The source must have been published within the confirmed window. Duration evidence is player or media_metadata; subtitle load is none/low/medium/high.
 
-```bash
+trend_status may be potential only when enabled. It is emitted separately, never silently promoted to proven.
+
+## Validate and select
+
+~~~bash
+python3 /path/to/video-content-pipeline/scripts/run_pipeline.py --config project.json --dry-run
 python3 /path/to/video-content-pipeline/scripts/select_video_candidates.py \
   --config project.json --candidates work/candidates.json --dry-run
-
 python3 /path/to/video-content-pipeline/scripts/select_video_candidates.py \
   --config project.json --candidates work/candidates.json \
   --output work/selection.json --execute
-```
+~~~
 
-The output includes `schema_version`, `account_slug`, `brief_fingerprint`, `generated_at`, fixed `min_likes_exclusive`, accepted `videos` with preserved evidence, `excluded` with per-item reasons, and counts. The brief fingerprint binds the selection to the current account and discovery configuration; changing positioning or selection settings requires review and reselection. This fingerprint is a change detector, not a security signature or evidence-authentication mechanism. The validator deduplicates by shortcode across `/p/`, `/reel/`, and `/reels/`, including previously used URLs. It respects input ranking and the confirmed count; excess items are not quietly downloaded. Output uses exclusive creation: choose a new batch filename rather than overwrite.
+Output schema_version is 2: account_slug, brief_fingerprint, generated_at, optional min_likes_exclusive, proven videos, separate potential, excluded with reasons, and counts. The requested total includes both accepted groups, with proven items prioritized. Cross-form shortcode deduplication includes seen_urls; no overwrite of an existing selection file.
 
-Return the trend summary and recommendation table with creator, content, exact likes, published date, duration, subtitle load, full source URL and account-fit reason. Include verification time and rejection counts. Only verified selections go in the recommendation table; zero selections is a valid honest result. A request to find videos ends here.
+A fingerprint detects changes to the account or discovery settings, not forged evidence. Version 1 manifests require refreshed observations/assessments and regeneration; do not silently fill missing fields.
 
-## 4. Hand off without losing evidence
+Deliver a short trend explanation and recommendations with creator, full URL, date, duration, subtitle burden, observed metric, assessment basis, fit and verification time. Separate proven/potential/unverified. A request to find videos ends here.
 
-For an authorized production batch, refresh source observations, regenerate the selection if needed, then:
+## Handoff
 
-```bash
+For an authorized production batch, refresh evidence and run:
+
+~~~bash
 python3 /path/to/video-content-pipeline/scripts/run_instagram_pipeline.py \
   --config project.json --selection-manifest work/selection.json \
   --manifest work/instagram-ingest.json --dry-run
+~~~
 
+Then use --execute for the same authorized scope, without repeatedly requesting permission already given. Revalidation checks the account/brief, current evidence, window, content review and enabled filters. Only proven videos are downloaded; potential stays in the selection report.
+
+For explicitly user-supplied URLs, even when discovery is enabled:
+
+~~~bash
 python3 /path/to/video-content-pipeline/scripts/run_instagram_pipeline.py \
-  --config project.json --selection-manifest work/selection.json \
-  --manifest work/instagram-ingest.json --execute
-```
+  --config project.json --direct-input --url https://www.instagram.com/reel/EXAMPLE_A/ \
+  --manifest work/instagram-ingest.json --dry-run
+~~~
 
-Use `--execute` only after the batch is authorized. Do not repeatedly ask for permission already given for the same scope. The intake rechecks the selection against the current account/settings/time, fails before downloading on stale or invalid evidence, and rejects direct URL input in scout mode. Do not disable the module or remove evidence to bypass it. Existing user-supplied-link workflows remain available when discovery was not requested and `video_scout` is disabled.
+Do not mix direct input with a selection manifest. Direct input is appropriate for supplied URLs or potential items the user specifically chose, not a workaround for agent-discovered items failing validation.
 
-Each downloaded video's `selection_evidence` preserves why it was selected. The intake manifest uses `videos`, compatible with the existing content/draft/attachment scripts. Enrich those same items into `work/batch-content.json`: actual creator, media path and duration, original captions and timings, faithful translations, titles/body/tags, taxonomy, research status, and timed `subtitles`. Do not discard provenance or replace observed captions with creative publishing copy. Recheck that the downloaded video matches the selected source and audio is present when expected.
+Retain selection_evidence while enriching intake videos into the content manifest: actual media identity/duration/audio checks, original captions and timings, faithful translations, separate publishing copy, taxonomy and review states. Use workflow.md and optional xiaohongshu-content.md for downstream steps.
 
-Continue with [workflow.md](workflow.md), optionally [xiaohongshu-content.md](xiaohongshu-content.md), and the existing draft/Feishu commands. Account styles, wording, target language and taxonomy come from project configuration. Different accounts never inherit a previous account's watermark or font presets.
+## Final output
 
-## 5. Final-output boundary
-
-The new stage connects discovery to the existing pipeline; it is not a new downloader, transcription engine or renderer. Existing editor, font, transcription and optional Feishu dependencies still apply. The bundled editor script creates independent drafts. Export requires an available editor/export capability, followed by actual-file visual/audio checks, subtitle boundary review, attribution safe margins and any configured endcard. Report `draft_created`, `exported`, `verified` separately. If export cannot run, deliver the draft and identify the missing step, not a fictitious finished MP4.
-
-For every selected video report source, selection evidence, download/content/draft/sync/export/QC results, paths and failure/skip reasons. Discovering or processing a public video does not establish reuse rights; attribution is not permission. Publishing is a separate authorized action.
+Existing transcription, editor, font and optional Feishu dependencies still apply. Draft generation is not MP4 export. Use available editor export capabilities, then verify the actual file for picture, sound, aligned and complete subtitles, attribution safe margins and configured ending. Report draft_created/exported/verified separately, plus per-item success/skip/failure reasons. No publication without authorization.

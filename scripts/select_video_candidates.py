@@ -11,7 +11,6 @@ from pathlib import Path
 from common import add_execution_flags, load_config, read_json
 from run_instagram_pipeline import normalize_instagram_url
 
-MIN_LIKES_EXCLUSIVE = 10000
 LOADS = {"none": 0, "low": 1, "medium": 2, "high": 3}
 
 
@@ -57,9 +56,13 @@ def validate_settings(config):
         raise ValueError("discovery.max_duration_seconds must be positive and finite")
     if settings.get("max_subtitle_load", "low") not in LOADS:
         raise ValueError("invalid discovery.max_subtitle_load")
-    # This is deliberately not a configurable threshold.
-    if "min_likes" in settings or "min_likes_exclusive" in settings:
-        raise ValueError("remove the configurable likes threshold; likes must be strictly greater than 10000")
+    minimum = settings.get("min_likes_exclusive")
+    if minimum is not None and (type(minimum) is not int or minimum < 0):
+        raise ValueError("discovery.min_likes_exclusive must be null or a nonnegative integer")
+    if "min_likes" in settings:
+        raise ValueError("use min_likes_exclusive to make the boundary explicit")
+    if settings.get("selection_mode", "proven") not in ("proven", "include_potential"):
+        raise ValueError("selection_mode must be proven or include_potential")
     return settings
 
 
@@ -69,29 +72,90 @@ def brief_fingerprint(config):
     return hashlib.sha256(encoded).hexdigest()
 
 
-def candidate_reasons(item, settings, now):
+def evidence_reasons(evidence, source_url, settings, now):
     reasons = []
+    if not isinstance(evidence, dict):
+        return ["heat evidence must be an object"]
     try:
-        source = normalize_instagram_url(item.get("source_url", ""))
-        evidence = normalize_instagram_url(item.get("likes_source_url", ""))
-        if source["shortcode"] != evidence["shortcode"]:
-            reasons.append("likes evidence belongs to a different post")
+        source = normalize_instagram_url(source_url)
+        observed = normalize_instagram_url(evidence.get("source_url", ""))
+        if source["shortcode"] != observed["shortcode"]:
+            reasons.append("heat evidence belongs to a different post")
     except ValueError:
         reasons.append("missing or invalid original/evidence URL")
+    if evidence.get("metric") not in ("likes", "views"):
+        reasons.append("heat metric must be post likes or video views")
+    if type(evidence.get("value")) is not int or evidence["value"] <= 0:
+        reasons.append("heat evidence needs a positive exact integer count")
+    if evidence.get("evidence_type") not in ("instagram_page", "instagram_metadata"):
+        reasons.append("heat needs primary Instagram evidence")
+    try:
+        age = now - timestamp(evidence["verified_at"])
+        if age < timedelta(0) or age > timedelta(hours=settings.get("verification_max_age_hours", 24)):
+            reasons.append("heat evidence is stale or future-dated")
+    except (KeyError, TypeError, ValueError):
+        reasons.append("verification timestamp is missing or invalid")
+    return reasons
+
+
+def candidate_reasons(item, settings, now):
+    reasons = []
     creator = item.get("creator")
     if not isinstance(creator, str) or not creator.strip().lstrip("@"):
         reasons.append("creator is missing")
-    likes = item.get("like_count")
-    if type(likes) is not int or likes <= MIN_LIKES_EXCLUSIVE:
-        reasons.append("exact original-post likes must be greater than 10000")
-    if item.get("likes_evidence_type") not in ("instagram_page", "instagram_metadata"):
-        reasons.append("likes need primary Instagram evidence")
-    try:
-        age = now - timestamp(item["verified_at"])
-        if age < timedelta(0) or age > timedelta(hours=settings.get("verification_max_age_hours", 24)):
-            reasons.append("likes evidence is stale or future-dated")
-    except (KeyError, TypeError, ValueError):
-        reasons.append("verification timestamp is missing or invalid")
+    evidence = item.get("heat_evidence")
+    if not isinstance(evidence, list) or not evidence:
+        reasons.append("verified heat evidence is required even without a likes filter")
+        evidence = []
+    for observation in evidence:
+        reasons.extend(evidence_reasons(observation, item.get("source_url", ""), settings, now))
+    minimum = settings.get("min_likes_exclusive")
+    if minimum is not None and not any(
+        isinstance(observation, dict) and observation.get("metric") == "likes"
+        and type(observation.get("value")) is int and observation["value"] > minimum
+        for observation in evidence
+    ):
+        reasons.append(f"exact original-post likes must be greater than {minimum}")
+    status = item.get("trend_status")
+    if status not in ("proven", "potential"):
+        reasons.append("trend status is unknown or unverified")
+    elif status == "potential" and settings.get("selection_mode", "proven") != "include_potential":
+        reasons.append("potential candidates are not enabled")
+    if not isinstance(item.get("trend_reason"), str) or not item["trend_reason"].strip():
+        reasons.append("explain the recent-breakout assessment, not just a counter")
+    basis = item.get("trend_basis")
+    if basis not in ("recent_high_volume", "relative_outperformance", "observed_growth"):
+        reasons.append("a supported heat assessment basis is required")
+    if basis in ("recent_high_volume", "relative_outperformance"):
+        comparison = item.get("comparison")
+        if not isinstance(comparison, dict) or not isinstance(comparison.get("context"), str) or not comparison["context"].strip():
+            reasons.append("a sourced comparison context is required")
+        else:
+            urls = comparison.get("source_urls")
+            if not isinstance(urls, list) or not urls:
+                reasons.append("comparison source URLs are required")
+            else:
+                try:
+                    for url in urls:
+                        normalize_instagram_url(url)
+                except ValueError:
+                    reasons.append("comparison source URLs must identify Instagram posts")
+    if basis == "observed_growth":
+        observations = item.get("growth_observations")
+        if not isinstance(observations, list) or len(observations) < 2:
+            reasons.append("growth requires at least two timed observations")
+        else:
+            growth_errors = []
+            for observation in observations:
+                growth_errors.extend(evidence_reasons(observation, item.get("source_url", ""), settings, now))
+            reasons.extend(growth_errors)
+            if not growth_errors:
+                ordered = sorted(observations, key=lambda observation: timestamp(observation["verified_at"]))
+                if len({observation["metric"] for observation in ordered}) != 1 or any(
+                    timestamp(right["verified_at"]) <= timestamp(left["verified_at"]) or right["value"] <= left["value"]
+                    for left, right in zip(ordered, ordered[1:])
+                ):
+                    reasons.append("growth observations need the same metric and increasing times/counts")
     try:
         published = timestamp(item["published_at"])
         if published > now or published < now - timedelta(days=settings.get("lookback_days", 7)):
@@ -119,39 +183,43 @@ def select_candidates(config, candidates, now=None, seen_urls=()):
     if not isinstance(candidates, list) or not all(isinstance(item, dict) for item in candidates):
         raise ValueError("candidates must be a list of objects")
     seen = {normalize_instagram_url(url)["shortcode"] for url in seen_urls}
-    selected, excluded = [], []
-    for item in candidates:
+    selected, potential, excluded = [], [], []
+    for item in sorted(candidates, key=lambda item: item.get("trend_status") == "potential"):
         reasons = candidate_reasons(item, settings, now)
         if not reasons:
             base = normalize_instagram_url(item["source_url"])
             if base["shortcode"] in seen:
                 reasons.append("duplicate or already used source")
-            elif len(selected) >= settings.get("limit", 5):
+            elif len(selected) + len(potential) >= settings.get("limit", 5):
                 reasons.append("confirmed selection count already reached")
             else:
                 seen.add(base["shortcode"])
-                selected.append({**item, **base, "creator": item["creator"].strip().lstrip("@")})
+                destination = potential if item["trend_status"] == "potential" else selected
+                destination.append({**item, **base, "creator": item["creator"].strip().lstrip("@")})
         if reasons:
             excluded.append({"source_url": item.get("source_url"), "reasons": reasons})
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "account_slug": config["account"]["slug"],
         "brief_fingerprint": brief_fingerprint(config),
         "generated_at": now.isoformat(),
-        "min_likes_exclusive": MIN_LIKES_EXCLUSIVE,
+        "min_likes_exclusive": settings.get("min_likes_exclusive"),
         "videos": selected,
+        "potential": potential,
         "excluded": excluded,
-        "counts": {"reviewed": len(candidates), "selected": len(selected), "excluded": len(excluded)},
+        "counts": {"reviewed": len(candidates), "selected": len(selected), "potential": len(potential), "excluded": len(excluded)},
     }
 
 
 def revalidate_selection(config, selection, now=None):
-    if not isinstance(selection, dict) or selection.get("schema_version") != 1:
-        raise ValueError("unsupported selection manifest")
+    if not isinstance(selection, dict) or selection.get("schema_version") != 2:
+        raise ValueError("unsupported selection manifest; refresh evidence and regenerate schema version 2")
     if selection.get("account_slug") != config["account"]["slug"]:
         raise ValueError("selection belongs to a different account")
     if selection.get("brief_fingerprint") != brief_fingerprint(config):
         raise ValueError("the account brief has changed; review candidates and reselect")
+    if any(item.get("trend_status") != "proven" for item in selection.get("videos", []) if isinstance(item, dict)):
+        raise ValueError("potential items cannot enter automatic production; the user must choose direct intake")
     result = select_candidates(config, selection.get("videos"), now=now)
     if not result["videos"] or result["excluded"]:
         raise ValueError("selection is empty or no longer passes discovery gates; refresh and reselect")

@@ -20,7 +20,7 @@ def project():
     config = json.loads((ROOT / "templates/project.template.json").read_text())
     config["account"].update(slug="cooking-demo", positioning="Quick home cooking", audience="Beginner cooks")
     config["modules"]["video_scout"] = True
-    config["discovery"].update(brief_confirmed=True, topics=["Cooking"], content_types=["Demonstration"])
+    config["discovery"].update(brief_confirmed=True, topics=["Cooking"], content_types=["Demonstration"], min_likes_exclusive=10000)
     return config
 
 
@@ -40,7 +40,13 @@ def candidate(now=NOW, **changes):
         "relevant": True,
         "fit_reason": "A short visual cooking demonstration for beginners",
     }
-    return {**item, **changes}
+    item.update(changes)
+    item.setdefault("heat_evidence", [{"metric": "likes", "value": item.get("like_count"), "source_url": item.get("likes_source_url"), "evidence_type": item.get("likes_evidence_type"), "verified_at": item.get("verified_at")}])
+    item.setdefault("trend_status", "proven")
+    item.setdefault("trend_basis", "recent_high_volume")
+    item.setdefault("trend_reason", "Outperforms comparable recent cooking demonstrations")
+    item.setdefault("comparison", {"context": "Reviewed comparable videos at similar ages", "source_urls": ["https://www.instagram.com/p/REFERENCE/"]})
+    return item
 
 
 class ScoutTests(unittest.TestCase):
@@ -64,6 +70,7 @@ class ScoutTests(unittest.TestCase):
     def test_views_cannot_replace_likes(self):
         item = candidate(view_count=1000000)
         del item["like_count"]
+        item["heat_evidence"][0].update(metric="views", value=1000000)
         self.assert_rejected(item)
 
     def test_missing_or_unconfirmed_brief_blocks_search(self):
@@ -118,7 +125,7 @@ class ScoutTests(unittest.TestCase):
 
     def test_cross_form_and_previously_used_duplicates(self):
         result = self.select([candidate(), candidate(source_url="https://www.instagram.com/p/EXAMPLE_A/")])
-        self.assertEqual(result["counts"], {"reviewed": 2, "selected": 1, "excluded": 1})
+        self.assertEqual(result["counts"], {"reviewed": 2, "selected": 1, "potential": 0, "excluded": 1})
         result = self.select([candidate()], seen_urls=["https://www.instagram.com/p/EXAMPLE_A/"])
         self.assertFalse(result["videos"])
         unique, duplicates = collect_urls(["https://www.instagram.com/reels/EXAMPLE_A/", "https://www.instagram.com/p/EXAMPLE_A/"])
@@ -132,7 +139,7 @@ class ScoutTests(unittest.TestCase):
         self.assertIn("count already reached", result["excluded"][0]["reasons"][0])
 
     def test_cannot_lower_likes_gate_or_use_invalid_settings(self):
-        for key, value in (("min_likes", 500), ("min_likes_exclusive", 9999), ("limit", 0), ("lookback_days", -1), ("max_duration_seconds", float("nan")), ("source_platform", "tiktok")):
+        for key, value in (("min_likes", 500), ("min_likes_exclusive", -1), ("min_likes_exclusive", True), ("limit", 0), ("lookback_days", -1), ("max_duration_seconds", float("nan")), ("source_platform", "tiktok")):
             config = project()
             config["discovery"][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
@@ -147,6 +154,7 @@ class ScoutTests(unittest.TestCase):
         cases.append(wrong_account)
         low_likes = copy.deepcopy(selection)
         low_likes["videos"][0]["like_count"] = 10000
+        low_likes["videos"][0]["heat_evidence"][0]["value"] = 10000
         cases.append(low_likes)
         empty = copy.deepcopy(selection)
         empty["videos"] = []
@@ -167,6 +175,52 @@ class ScoutTests(unittest.TestCase):
         result = self.select([candidate(like_count=9999)])
         self.assertFalse(result["videos"])
         self.assertEqual(result["counts"]["excluded"], 1)
+
+    def test_likes_filter_is_optional_and_default_off(self):
+        template = json.loads((ROOT / "templates/project.template.json").read_text())
+        self.assertIsNone(template["discovery"]["min_likes_exclusive"])
+        self.config["discovery"]["min_likes_exclusive"] = None
+        self.assertEqual(len(self.select([candidate(like_count=5000)])["videos"]), 1)
+        item = candidate(like_count=None)
+        item["heat_evidence"][0].update(metric="views", value=250000)
+        self.assertEqual(len(self.select([item])["videos"]), 1)
+
+    def test_no_likes_filter_still_requires_verified_heat(self):
+        self.config["discovery"]["min_likes_exclusive"] = None
+        for item in (candidate(heat_evidence=[]), candidate(trend_status="unknown"), candidate(trend_reason=""), candidate(comparison={})):
+            self.assert_rejected(item)
+
+    def test_custom_likes_threshold(self):
+        self.config["discovery"]["min_likes_exclusive"] = 1000
+        self.assert_rejected(candidate(like_count=1000))
+        self.assertEqual(len(self.select([candidate(like_count=1001)])["videos"]), 1)
+
+    def test_potential_opt_in_stays_out_of_production(self):
+        self.assert_rejected(candidate(trend_status="potential"))
+        self.config["discovery"]["selection_mode"] = "include_potential"
+        result = self.select([candidate(trend_status="potential")])
+        self.assertEqual(len(result["potential"]), 1)
+        self.assertFalse(result["videos"])
+        with self.assertRaises(ValueError):
+            revalidate_selection(self.config, result, now=NOW)
+        result["videos"] = result["potential"]
+        with self.assertRaisesRegex(ValueError, "potential items"):
+            revalidate_selection(self.config, result, now=NOW)
+
+    def test_growth_requires_two_increasing_observations(self):
+        item = candidate(trend_basis="observed_growth")
+        self.assert_rejected(item)
+        current = item["heat_evidence"][0]
+        item["growth_observations"] = [{**current, "value": 5000, "verified_at": (NOW-timedelta(hours=3)).isoformat()}, current]
+        self.assertEqual(len(self.select([item])["videos"]), 1)
+        item["growth_observations"][0]["verified_at"] = current["verified_at"]
+        self.assert_rejected(item)
+
+    def test_old_selection_needs_regeneration(self):
+        selection = self.select([candidate()])
+        selection["schema_version"] = 1
+        with self.assertRaisesRegex(ValueError, "schema version 2"):
+            revalidate_selection(self.config, selection, now=NOW)
 
 
 class ScoutCliTests(unittest.TestCase):
@@ -230,6 +284,14 @@ class ScoutCliTests(unittest.TestCase):
         self.write(self.config_path, self.config)
         result = self.run_script("run_instagram_pipeline.py", "--url", candidate()["source_url"])
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_explicit_user_input_bypasses_discovery_not_authority(self):
+        result = self.run_script("run_instagram_pipeline.py", "--direct-input", "--url", candidate()["source_url"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["dry_run"])
+        self.create_selection()
+        mixed = self.run_script("run_instagram_pipeline.py", "--direct-input", "--selection-manifest", self.selection)
+        self.assertNotEqual(mixed.returncode, 0)
 
     def test_router_reports_onboarding_then_discovery(self):
         result = self.run_script("run_pipeline.py")

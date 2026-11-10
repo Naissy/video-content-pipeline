@@ -1,511 +1,130 @@
-# video-content-pipeline
+# Video Content Pipeline · 你的视频制作搭档
 
-一套可跨账号、跨内容类型复用的短视频生产 Skill。从账号定位、近期热点选材开始，连接素材下载、字幕与文案、可选飞书同步、剪映草稿与成品检查；不默认任何行业、账号、水印或字体。
+想找适合自己账号的视频，又不想把下载、字幕、文案和剪辑分开折腾？
 
-> 安全原则：默认只做 dry-run。飞书上传和剪映草稿生成必须显式传入 `--execute`。
+这个项目把这些步骤串起来。你用日常语言告诉 Codex 想做什么，它先了解你的账号，再按需要找素材、处理视频、准备发布内容和剪映草稿。
 
-## 从选材开始：先问清楚，再找视频
+**不需要懂代码。也不限定账号类型：科普、搞笑、健身、美食、亲子、生活方式都可以。**
 
-```text
-使用 $video-content-pipeline，从选材开始处理。
-先问清我的账号定位、受众、内容方向与筛选要求，
-再找近期热点，只选核实原帖点赞严格大于 10000 的视频。
-选好后把清单交给下载、字幕文案、剪映和成品检查流程。
-```
+## 从这里开始
 
-内置的 `$rehab-video-scout` 保留旧名字，但现在是通用选材入口。首次使用或换账号会先问四组问题，已有答案只补问缺项：
+你需要一个可以使用本地技能的 Codex。第一次使用，把这句话发给它：
 
-1. 账号讲什么、给谁看、提供什么价值？
-2. 想找哪些主题和形式，有什么参考与禁区？
-3. 从哪里找、发布到哪里、面向什么语言或地区？
-4. 找几条、最近多久、最长多少秒、能接受多少字幕？
+~~~text
+请帮我安装这个项目：https://github.com/Naissy/video-content-pipeline
+并检查我的电脑能完成哪些步骤。先不要下载视频或修改我的现有项目。
+~~~
 
-确认后才分析近期热点，核验实际视频。**原帖精确点赞必须 > 10000**：恰好一万、隐藏点赞、只有“10K”、播放量很高但点赞不足，都不选；不够数量就少交付。旧视频历史高赞不冒充近期热点。不同定位使用独立项目配置，不继承旧账号设置。
+它会帮你检查下载工具、视频处理工具和剪映等依赖。不同电脑的可用功能可能不同；缺少工具、登录或权限时会说明，不会假装已经完成。
 
-链路：**账号 brief → 近期主题分析 → 原帖核验与选材 → selection manifest → 下载 → 原字幕与时间轴 → 翻译/发布文案 → 剪映草稿 → 导出与质检**。飞书、Creator Buddy 和剪映按需启用。只要求找视频时停在选材，不自动下载。
+安装完成后，选下面一种用法即可。
 
-在 `project.json` 开启 `modules.video_scout` 并填写确认后的 `account.positioning`、`account.audience` 和 `discovery`。候选验证与下载通过 `--selection-manifest` 对接，保留每条点赞证据和入选原因，不用手抄链接；过期证据和不合格条目会在下载前阻止。详见 [选材与生产交接](references/video-scout.md)。
+## 用法一：我还没有素材，帮我找
 
-注意：仓库提供选材校验和已有生产工具的工作流衔接，不是无人值守的一键渲染器。搜索/实际视频审核由 agent 完成，剪映脚本生成草稿；成品导出还需可用编辑器，并检查导出的真实文件，不能把“草稿已生成”写成“成品可发布”。
+复制这段话，改成你的想法：
 
-## 最快用法：直接给 Instagram 链接
+~~~text
+使用 $video-content-pipeline，帮我找最近一周的爆款视频。
+我的账号做新手家常菜，给下班后想快速做饭的人看。
+想找 5 条短小、画面容易理解、字幕不多的视频。
+先给我推荐清单，不下载。
+~~~
 
-安装并配置一次后，可以直接在 Codex 中输入：
+如果还没想清楚，直接说“帮我从账号定位开始”也可以。它会先问清楚：
 
-```text
-使用 $video-content-pipeline 处理这些公开 Instagram 视频：
-https://www.instagram.com/reel/EXAMPLE_A/
-https://www.instagram.com/p/EXAMPLE_B/
+1. 你做什么账号？想给谁看？
+2. 想做什么内容？有没有参考或不想碰的主题？
+3. 从哪个平台找？准备发到哪里？用什么语言？
+4. 要几条、多长、最近多久？是否设置最低点赞？要不要看潜力素材？
 
-自动下载、生成中文字幕和小红书文案，并为每条视频生成独立剪映草稿。
-这次不同步飞书。先给我 dry-run 结果，确认后执行。
-```
+已经回答过的，不会每次重新问。换账号时会重新确认，不会把上个账号的水印、字体或内容风格套过来。
 
-需要飞书时把最后一句改成：
+### 它怎么挑“近期爆款”？
 
-```text
-完成草稿后同步飞书附件；按来源 URL 匹配已有记录，缺失或重复记录则停止该条并报告。
-```
+默认看**最近 7 天、符合账号定位、热度有依据**的视频，不把几个月前的老高赞视频当成新热点。
 
-内部流程是：链接规范化与去重 → `yt-dlp` 下载 → 转写与中文字幕 → 可选 Creator Buddy 调研 → 小红书标题/正文/Tag → 剪映草稿 → 可选飞书同步。受平台限制、字幕不清、样式依赖缺失的条目会单独停止，不影响其他已通过检查的链接。
+它会核对可见的播放、点赞、发布时间，并结合同类作品的表现说明为什么值得选。只有拿到不同时间点的数据，才会说“正在快速增长”。
 
-## 你可以用它做什么
+**最低点赞是可选项，不是所有账号都必须超过一万赞。**
 
-- 按创作者名称，把任务记录与本地视频做一对一匹配。
-- 找出缺失文件、重复记录、同名视频等不安全情况。
-- 辅助检查字幕出现/消失时间、主要画面转场和疑难语音片段。
-- 根据不同账号的语气、分类和受众生成字幕、标题、正文与标签。
-- 可选地把视频附件上传到已有飞书记录。
-- 可选地按已验证的数值化样式生成剪映草稿。
+- 不设置：可以结合其他可核实指标判断，点赞隐藏不等于直接淘汰。
+- 设置“严格超过一万赞”：就必须核实原帖点赞大于 10,000，不能拿播放量代替。
+- 所有热度都无法核实：标为待核实，不混进爆款清单。
 
-## 1. 安装
+“近期爆款”和“潜力候选”会分开。默认只推荐前者；你想看潜力素材时再开启。高热度不代表一定适合你的账号，也不保证换个平台仍然会火。
 
-### 作为 Codex Skill 安装
+## 用法二：我已经有链接或视频，直接处理
 
-克隆仓库到本机 Skill 目录（目标目录不存在时）：
+~~~text
+使用 $video-content-pipeline，处理下面这些视频：
+（在这里粘贴链接，或提供本地视频文件）
 
-```bash
-mkdir -p ~/.codex/skills
-git clone git@github.com:Naissy/video-content-pipeline.git ~/.codex/skills/video-content-pipeline
-```
+按我的账号风格生成忠实的中文字幕、标题、正文和标签，
+再生成独立的剪映草稿。这次不用飞书。
+~~~
 
-安装后可在 Codex 中直接说：
+这是你**指定的素材**，不需要重新通过自动选材的热度门槛。当前内置下载适配器支持公开 Instagram 视频；其他平台可以先提供本地文件。登录、验证码或访问限制不能绕过。
 
-```text
-使用 $video-content-pipeline，读取当前项目的 project.json，先 dry-run 处理这批视频。
-```
+如果只想做其中一步，也可以说：
 
-主 Skill 已能路由到内置选材模块，无需重复安装。如果还想单独用 `$rehab-video-scout` 调用，可将仓库的 `skills/rehab-video-scout` 目录安装到自己的 Skill 目录。已有同名 Skill 时先比较并备份，仅更新这一个目录；不要直接覆盖手工修改。
+~~~text
+只下载并检查音频，先不要剪辑。
+~~~
 
-也可以不安装为 Skill，直接克隆仓库并运行其中的 Python 脚本。
+~~~text
+只给我这几条的视频简介、小红书标题、正文和 Tag。
+~~~
 
-## 2. 准备一个视频项目
+## 用法三：从找素材做到成品
 
-建议让 Skill 仓库和业务项目分开。业务项目保存自己的配置、素材和工作产物：
+~~~text
+使用 $video-content-pipeline，先找符合我账号的近期爆款。
+给我看推荐清单，我选好后再下载制作。
+需要中文字幕、作者署名、小红书文案和剪映草稿。
+如果我的电脑支持导出，请继续导出并检查最终视频。
+~~~
 
-```text
-my-video-project/
-├── project.json
-├── records.json
-├── videos/
-│   ├── alice.mp4
-│   └── bob.mp4
-└── work/
-```
+完整流程：
 
-复制配置模板：
+**了解账号 → 找近期素材 → 核实热度与内容 → 下载及音频检查 → 对齐原字幕并翻译 → 准备发布文案 → 剪映草稿 → 导出与检查**
 
-```bash
-cd /path/to/my-video-project
-cp ~/.codex/skills/video-content-pipeline/templates/project.template.json project.json
-```
-
-首次使用建议只开启本地模块：
-
-```json
-{
-  "modules": {
-    "video_scout": false,
-    "instagram_intake": true,
-    "local_intake": true,
-    "feishu": false,
-    "content_analysis": true,
-    "xiaohongshu_research": false,
-    "jianying": false
-  }
-}
-```
-
-Instagram 下载还需要保留以下默认设置：
-
-```json
-{
-  "instagram": {
-    "downloader": "yt-dlp",
-    "public_only": true,
-    "max_urls_per_batch": 20,
-    "timeout_seconds_per_url": 120
-  }
-}
-```
-
-本 Skill 不会自动安装 `yt-dlp`。运行前可用 `yt-dlp --version` 检查；缺失时应停止，并由用户自行选择安装方式。
-
-### 命令行下载一个或多个链接
-
-先 dry-run：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/run_instagram_pipeline.py \
-  --config project.json \
-  --url "https://www.instagram.com/reel/EXAMPLE_A/" \
-  --url "https://www.instagram.com/p/EXAMPLE_B/" \
-  --manifest work/instagram-ingest.json \
-  --dry-run
-```
-
-确认后下载并写入 intake manifest：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/run_instagram_pipeline.py \
-  --config project.json \
-  --url-file instagram-urls.txt \
-  --manifest work/instagram-ingest.json \
-  --execute
-```
-
-`instagram-urls.txt` 每行一个链接，空行和以 `#` 开头的说明会被忽略。仅接受公开的 `/reel/`、`/reels/`、`/p/` 和 `/tv/` 内容链接，同一 shortcode 跨链接形式去重；不读取浏览器 cookies，也不处理个人主页链接。以上直接链接用法适用于未开启选材模块的项目；开启后必须传入已经核验的 `--selection-manifest`，不能用裸链接绕过点赞门槛。
-
-然后按项目修改这些内容：
-
-- `account.name`：账号显示名。
-- `account.slug`：稳定的英文项目标识。
-- `account.tone`：标题、字幕和正文的表达风格。
-- `taxonomy`：当前账号允许使用的分类、受众和主题标签。
-- `paths.video_root`：视频素材目录。
-- `paths.work_root`：manifest、字幕和分析产物目录。
-- `feishu.fields`：记录 JSON 或飞书表格中的实际字段名。
-
-完整字段说明见 [`references/config-schema.md`](references/config-schema.md)。真实 `project.json` 已被 `.gitignore` 排除，不要把凭证直接提交到 Git。
-
-## 3. 先做配置 dry-run
-
-所有命令建议从业务项目根目录运行：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/run_pipeline.py \
-  --config project.json \
-  --dry-run
-```
-
-输出会显示启用的模块和计划经过的阶段。这个入口只负责验证和路由，不会代替各阶段的执行脚本。
-
-## 4. 准备任务记录
-
-本地记录可以是 JSON 数组，也可以放在 `records` 字段中。字段名必须与 `project.json` 的 `feishu.fields` 对应。使用默认模板时，最小示例如下：
-
-```json
-[
-  {
-    "id": "record-001",
-    "Creator": "@alice",
-    "Source URL": "https://example.com/video/001",
-    "Video": []
-  },
-  {
-    "id": "record-002",
-    "Creator": "bob",
-    "Source URL": "https://example.com/video/002",
-    "Video": []
-  }
-]
-```
-
-本地文件名应能对应创作者名。匹配时会忽略大小写、开头的 `@`，以及空格、点、下划线和连字符的格式差异，但不会合并不同创作者。
-
-## 5. 匹配记录和视频
-
-先预览匹配结果，不写文件：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/match_videos.py \
-  --config project.json \
-  --records records.json \
-  --video-dir videos \
-  --output work/match-manifest.json \
-  --dry-run
-```
-
-确认后写入本地 manifest：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/match_videos.py \
-  --config project.json \
-  --records records.json \
-  --video-dir videos \
-  --output work/match-manifest.json \
-  --execute
-```
-
-结果包含四组数据：
-
-- `matched`：唯一的一对一匹配，可以进入后续步骤。
-- `unmatched_records`：有记录但没有对应视频，或缺少稳定字段。
-- `unmatched_files`：有本地视频但没有对应记录。
-- `ambiguous`：同一规范化名称对应多条记录或多个文件。
-
-只处理 `matched`。出现 `ambiguous` 时应修正命名或记录，不要手工猜测映射。
-
-## 6. 内容分析与字幕准备
-
-内容生成由 Codex 根据原视频、`account.tone` 和 `taxonomy` 完成。如果要生成更贴合近期小红书语境的标题、正文和 Tag，启用 Creator Buddy 调研模块：
-
-```json
-{
-  "modules": {
-    "content_analysis": true,
-    "xiaohongshu_research": true
-  },
-  "xiaohongshu": {
-    "research_skill": "creator-buddy",
-    "lookback_days": 30,
-    "search_limit": 20,
-    "title_count": 10,
-    "tag_count": 10,
-    "human_review_before_sync": true
-  }
-}
-```
-
-这一阶段采用两步链路：
-
-1. `$creator-buddy` 只读搜索近期热门笔记，输出互动信号、关键词、标题公式、受众痛点和可借鉴结构。
-2. `$video-content-pipeline` 再结合原视频和账号配置，生成原创的小红书标题、正文和 Tag。
-
-推荐给 Codex 的完整任务描述：
-
-```text
-使用 $video-content-pipeline 分析 work/match-manifest.json 中的 matched 视频。
-项目启用了 xiaohongshu_research：先调用 $creator-buddy，以小红书为平台，
-根据视频主题搜索最近 30 天的热门笔记，提取关键词、标题公式、受众痛点和内容结构，
-并保存带来源链接的 research_context。不要照抄原文，也不要编造不可用的热度数据。
-然后结合原视频、account.tone、taxonomy 和 research_context，为每条视频输出：
-原字幕、中文化字幕、内容简介、10 个标题候选、1 个推荐标题、正文、最多 10 个 Tag、分类和受众。
-分类只能从 project.json 的 taxonomy 中选择；听不清的字幕进入人工校对，不要猜。
-先把结果写入新的 work/batch-content.json，等待人工确认，不执行飞书同步或剪映生成。
-```
-
-如果 `$creator-buddy` 或小红书搜索后端不可用，必须把 `research_status` 标记为 `unavailable`，并将结果注明为 `content_only_fallback`，不能声称标题经过热点验证。详细数据结构和生成规则见 [`references/xiaohongshu-content.md`](references/xiaohongshu-content.md)。
-
-准备剪映草稿时，每条视频还需要：
-
-```json
-{
-  "file": "/absolute/path/to/alice.mp4",
-  "creator": "alice",
-  "source_url": "https://example.com/video/001",
-  "duration": 8.5,
-  "slug": "study-break",
-  "subtitles": [
-    {"start": 0.2, "duration": 2.1, "text": "第一句字幕"},
-    {"start": 2.5, "duration": 2.8, "text": "第二句字幕"}
-  ]
-}
-```
-
-每段字幕必须满足：`start >= 0`、`duration > 0`，并且结束时间不能超过视频时长。
-
-## 7. 可选：画面与语音辅助工具
-
-这些工具默认只展示计划。真正生成 JSON、图片、音频切片或字幕文件时使用 `--execute`。
-
-### 检测字幕边界
-
-manifest 中需要一条包含 `text_overlays` 的匹配记录：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/detect_caption_changes.py \
-  --config project.json \
-  --video videos/alice.mp4 \
-  --manifest work/overlay-manifest.json \
-  --output work/caption-boundaries.json \
-  --dry-run
-```
-
-执行阶段需要 Python 环境中已有 OpenCV 和 NumPy。
-
-### 查找主要转场
-
-创建 `work/boundaries.json`：
-
-```json
-[
-  {"name": "intro_to_demo", "approximate_time": 3.2},
-  {"name": "demo_to_result", "approximate_time": 8.7}
-]
-```
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/detect_major_transitions.py \
-  --config project.json \
-  --video videos/alice.mp4 \
-  --boundaries work/boundaries.json \
-  --output-dir work/transitions \
-  --execute
-```
-
-### 生成边界检查图
-
-创建 `work/windows.json`：
-
-```json
-[
-  {"name": "caption-01", "start": 2.8, "end": 3.6, "step": 0.1}
-]
-```
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/make_boundary_sheets.py \
-  --config project.json \
-  --video videos/alice.mp4 \
-  --windows work/windows.json \
-  --output-dir work/boundary-sheets \
-  --execute
-```
-
-### 细化疑难语音片段
-
-输入必须是 whisper.cpp 可处理的 WAV 文件。创建 `work/segments.json`：
-
-```json
-[
-  {
-    "name": "unclear-sentence",
-    "start": 4.2,
-    "end": 7.6,
-    "prompt": "Context words that may occur in this segment."
-  }
-]
-```
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/refine_whisper_segments.py \
-  --config project.json \
-  --audio work/audio-16k.wav \
-  --model /path/to/whisper-model.bin \
-  --segments work/segments.json \
-  --output-dir work/refined-transcript \
-  --language auto \
-  --execute
-```
-
-这个工具要求系统中已有 `whisper-cli`，仓库不会下载或附带模型。
-
-## 8. 可选：同步飞书附件
-
-先在 `project.json` 中启用飞书：
-
-```json
-{
-  "modules": {
-    "feishu": true
-  },
-  "feishu": {
-    "base_token": "${FEISHU_BASE_TOKEN}",
-    "table_id": "${FEISHU_TABLE_ID}"
-  }
-}
-```
-
-在终端设置环境变量，不要把真实值写入仓库：
-
-```bash
-export FEISHU_BASE_TOKEN="your-base-token"
-export FEISHU_TABLE_ID="your-table-id"
-```
-
-先检查上传计划：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/sync_feishu.py \
-  --config project.json \
-  --manifest work/match-manifest.json \
-  --dry-run
-```
-
-只有以下条件全部满足时才可执行：record ID 存在、创作者存在、来源 URL 完整、本地视频存在、附件列为空。
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/sync_feishu.py \
-  --config project.json \
-  --manifest work/match-manifest.json \
-  --execute
-```
-
-执行需要已安装并登录 `lark-cli`。脚本只上传到已有记录，不会因匹配失败自动创建新记录。
-
-## 9. 可选：生成剪映草稿
-
-剪映模块要求：
-
-- 单独安装兼容的 Jianying Skill。
-- 本机存在所需文字预设和字体资源。
-- 已有经过人工验证的数值化样式档案。
-- `draft.style_verified` 为 `true`。
-- `draft.overwrite` 必须为 `false`。
-
-环境变量示例：
-
-```bash
-export JY_SKILL_ROOT="/path/to/jianying-editor-skill"
-export JY_PRESET_ROOT="/path/to/local/text-presets"
-export JY_STYLE_PROFILE="/path/to/verified-style-profile.json"
-```
-
-在 `project.json` 中设置 `modules.jianying` 为 `true`，然后先 dry-run：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/create_jianying_drafts.py \
-  --config project.json \
-  --manifest work/batch-content.json \
-  --dry-run
-```
-
-确认每条视频的项目名、文件路径、字幕时间和依赖后再执行：
-
-```bash
-python3 ~/.codex/skills/video-content-pipeline/scripts/create_jianying_drafts.py \
-  --config project.json \
-  --manifest work/batch-content.json \
-  --execute
-```
-
-每个视频会生成独立草稿，并包含主视频、字幕和作者署名轨道。加密草稿只能作为样式来源证明，不能作为 `JY_STYLE_PROFILE`，也不会被读取、复制或修改。
-
-### 从草稿到可发布成品
-
-需要最终视频时，使用已配置的编辑器导出能力，再核看真实导出文件：画面完整、应有声音不缺失、每组字幕的内容与进出时间吻合、标题与对白分层、字号/位置不遮挡、署名有安全边距、结尾符合账号配置。结果分别标记 `draft_created`、`exported`、`verified`；没有实际导出或未完成质检，就明确保留未完成状态。选材高赞不代表事实正确或已获转载许可，自动发布也不在本流程默认权限内。
-
-## 10. 常见问题
-
-### 为什么匹配结果是 `ambiguous`？
-
-同一创作者对应了多条记录或多个文件。请先让记录和文件恢复唯一映射，再重新运行；不要删除歧义结果后强行继续。
-
-### 为什么本地模式还保留 `feishu.fields`？
-
-匹配器把它作为通用记录字段映射使用。即使不连接飞书，`records.json` 的字段名也需要与这里一致。
-
-### 为什么 dry-run 没有生成文件？
-
-这是预期行为。工具默认把计划打印到终端；需要生成本地 manifest 或分析产物时，明确使用 `--execute`。飞书上传和剪映生成也采用同一安全边界。
-
-### 可以覆盖已有剪映草稿吗？
-
-不可以。这个 Skill 将覆盖视为阻塞错误，避免破坏人工调整或其他账号的项目。
-
-### 会自动下载视频或 Whisper 模型吗？
-
-不会。素材下载、版权确认、模型准备和个人剪映资源均由使用者管理。
-
-## 依赖一览
-
-| 能力 | 依赖 |
-|---|---|
-| 配置验证、记录匹配 | Python 3.9+ 标准库 |
-| 字幕边界、转场、检查图 | OpenCV、NumPy |
-| 疑难语音重转写 | `whisper-cli`、本地模型 |
-| 飞书附件同步 | 已认证的 `lark-cli` |
-| 剪映草稿 | 兼容的 Jianying Skill、本地预设、字体、已验证样式档案 |
-
-## 开发与自检
-
-```bash
-python3 -m unittest discover -s tests -v
-python3 scripts/release_check.py
-python3 scripts/run_pipeline.py \
-  --config templates/project.template.json \
-  --dry-run
-```
-
-发布前检查会阻止账号专属值、个人绝对路径和超过 5 MiB 的文件进入仓库。
+字幕忠实于原话，不擅自加梗或 emoji；标题、正文和标签可以另外创作。署名、字体和布局使用你确认过的账号设置。
+
+## 最后会拿到什么？
+
+根据你选择的步骤，会收到：
+
+- 选材清单：原链接、作者、内容、热度依据和推荐理由。
+- 本地视频，以及是否缺音频的检查结果。
+- 对应原字幕的翻译和发布文案。
+- 每条视频独立的剪映草稿。
+- 若已成功导出：视频文件和检查结果。
+- 每条素材的成功、跳过、失败及原因，不漏报。
+
+**剪映草稿不等于导出的视频。** 本项目的脚本负责生成草稿；导出需要可用的编辑器能力。只有实际检查过导出的画面、声音、字幕和署名位置，才会标记“成品已验证”。暂时做不到的步骤会明确告诉你。
+
+## 飞书、审核和安全
+
+- **飞书不是必需品。** 不用飞书也可以做本地视频。
+- 想同步飞书时，需要你的账号授权和明确的目标表格。现有脚本支持给唯一匹配的已有记录上传附件；创建新行和更新文案字段还需要对应连接能力。
+- 只让它找素材，不会自动下载、剪辑或发布。
+- 你已经确认的同一批任务，不会在每个普通步骤反复问“是否开始”。付费、权限变化或覆盖旧作品等情况会另外说明。
+- 不覆盖你的旧草稿，不把个人配置、凭证或素材提交到 GitHub。
+- 能看到、能下载不代表已经取得转载许可。请确认使用权限，保留来源署名；正式发布需要另行授权。
+
+## 想单独使用选材功能？
+
+可以调用 $rehab-video-scout。名字沿用旧版本，但现在不限康复类账号。主工作流已经包含它；如果 Codex 找不到这个独立名称，让它安装仓库里的 skills/rehab-video-scout 即可。
+
+## 给需要自行配置的人
+
+普通使用者可以跳过这一节。把账号配置保存在业务项目的 project.json，不要放进公开仓库。
+
+- [配置字段说明](references/config-schema.md)
+- [选材证据与下载交接](references/video-scout.md)
+- [Instagram 下载流程](references/instagram-workflow.md)
+- [字幕、剪辑和成品检查](references/workflow.md)
+- [小红书内容调研](references/xiaohongshu-content.md)
+- [配置模板](templates/project.template.json)
+
+开发者运行测试：`python3 -m unittest discover -s tests -v`。检查可公开发布的文件：`python3 scripts/release_check.py`。

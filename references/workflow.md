@@ -2,7 +2,7 @@
 
 ## 0. Discover when requested
 
-Read the bundled scout instructions and [video-scout.md](video-scout.md). Ask about positioning/audience, topics/formats/exclusions, platforms/language, and count/recency/duration/subtitle burden. Reuse known answers, but obtain the missing brief before searching. Review recent source evidence and actual videos; select only exact original-post likes > 10000. Generate the evidence-bearing selection manifest and feed it directly to Instagram intake. Insufficient qualified results means fewer results, not a lower threshold. Direct user-supplied media can skip discovery in a separate direct-intake project.
+Read the bundled scout instructions and [video-scout.md](video-scout.md). Ask about positioning/audience, topics/formats/exclusions, platforms/language, count/recency/duration/subtitle burden, optional minimum likes and whether to include potential candidates. Reuse known answers before searching. Default to recent proven breakouts with reliable heat evidence, no minimum likes; enforce any user-enabled filter. Generate the evidence-bearing manifest and feed proven items directly to intake. Insufficient qualified results means fewer results. Explicitly user-supplied media skip discovery through `--direct-input`, even in the same project. Potential items stay separate unless the user specifically selects them for direct processing.
 
 ## 1. Validate
 

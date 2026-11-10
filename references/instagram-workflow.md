@@ -4,10 +4,10 @@ Use this workflow when the user provides one or more Instagram post, Reel, or IG
 
 ## Intake contract
 
-- Accept direct links as repeated `--url` values or a UTF-8 `--url-file` with one link per line. Scout-enabled projects instead require `--selection-manifest`; do not mix the two input modes.
+- Accept explicitly user-supplied links as repeated `--url` values or a UTF-8 `--url-file`, with `--direct-input` when scout is enabled. Agent-discovered recommendations require `--selection-manifest`; do not mix input modes or use direct input to misrepresent an unverified recommendation.
 - Accept only public HTTPS `instagram.com/reel/<shortcode>`, `/reels/<shortcode>`, `/p/<shortcode>`, and `/tv/<shortcode>` URLs.
 - Remove tracking query parameters, canonicalize `/reels/` to `/reel/`, and deduplicate by shortcode across URL forms before download. Existing `stable_id` formatting is retained for compatibility; use shortcode for cross-form identity.
-- A selection manifest is revalidated for the same account, complete evidence, recent publication, evidence freshness, likes > 10000, duration, relevance, and subtitle preference. Stale/invalid selections stop before any download. The validator checks recorded evidence, not the live website; refresh the original-post observations before handoff. Store accepted evidence in each intake item's `selection_evidence` and retain it through analysis.
+- A schema-2 selection manifest is revalidated for the same account/brief, proven assessment, primary heat evidence, recency, freshness, any enabled likes filter, duration, relevance, and subtitle preference. Default likes filter is disabled. Potential items are not downloaded automatically. Stale/invalid selections stop before download. The validator checks recorded fields, not the live website or truth of an assessment; refresh original observations before handoff. Retain `selection_evidence` through analysis. Old schema-1 selections require refreshed evidence and regeneration.
 - Use `yt-dlp` without cookies, browser profiles, usernames, or passwords. Do not install it automatically.
 - Reuse an existing uniquely named media file only when its matching `.info.json` metadata exists. Never overwrite media.
 - Cap a batch with `instagram.max_urls_per_batch`; larger input requires the user to split it.
