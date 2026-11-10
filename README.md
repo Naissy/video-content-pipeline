@@ -1,8 +1,32 @@
 # video-content-pipeline
 
-一套可跨账号、跨内容类型复用的短视频生产 Skill。它把素材接入、视频匹配、字幕与画面辅助分析、飞书附件同步和剪映草稿生成拆成独立模块；不用飞书或剪映时，可以只运行本地流程。
+一套可跨账号、跨内容类型复用的短视频生产 Skill。从账号定位、近期热点选材开始，连接素材下载、字幕与文案、可选飞书同步、剪映草稿与成品检查；不默认任何行业、账号、水印或字体。
 
 > 安全原则：默认只做 dry-run。飞书上传和剪映草稿生成必须显式传入 `--execute`。
+
+## 从选材开始：先问清楚，再找视频
+
+```text
+使用 $video-content-pipeline，从选材开始处理。
+先问清我的账号定位、受众、内容方向与筛选要求，
+再找近期热点，只选核实原帖点赞严格大于 10000 的视频。
+选好后把清单交给下载、字幕文案、剪映和成品检查流程。
+```
+
+内置的 `$rehab-video-scout` 保留旧名字，但现在是通用选材入口。首次使用或换账号会先问四组问题，已有答案只补问缺项：
+
+1. 账号讲什么、给谁看、提供什么价值？
+2. 想找哪些主题和形式，有什么参考与禁区？
+3. 从哪里找、发布到哪里、面向什么语言或地区？
+4. 找几条、最近多久、最长多少秒、能接受多少字幕？
+
+确认后才分析近期热点，核验实际视频。**原帖精确点赞必须 > 10000**：恰好一万、隐藏点赞、只有“10K”、播放量很高但点赞不足，都不选；不够数量就少交付。旧视频历史高赞不冒充近期热点。不同定位使用独立项目配置，不继承旧账号设置。
+
+链路：**账号 brief → 近期主题分析 → 原帖核验与选材 → selection manifest → 下载 → 原字幕与时间轴 → 翻译/发布文案 → 剪映草稿 → 导出与质检**。飞书、Creator Buddy 和剪映按需启用。只要求找视频时停在选材，不自动下载。
+
+在 `project.json` 开启 `modules.video_scout` 并填写确认后的 `account.positioning`、`account.audience` 和 `discovery`。候选验证与下载通过 `--selection-manifest` 对接，保留每条点赞证据和入选原因，不用手抄链接；过期证据和不合格条目会在下载前阻止。详见 [选材与生产交接](references/video-scout.md)。
+
+注意：仓库提供选材校验和已有生产工具的工作流衔接，不是无人值守的一键渲染器。搜索/实际视频审核由 agent 完成，剪映脚本生成草稿；成品导出还需可用编辑器，并检查导出的真实文件，不能把“草稿已生成”写成“成品可发布”。
 
 ## 最快用法：直接给 Instagram 链接
 
@@ -20,7 +44,7 @@ https://www.instagram.com/p/EXAMPLE_B/
 需要飞书时把最后一句改成：
 
 ```text
-完成草稿后同步飞书；按来源 URL 更新已有记录，不存在时创建，重复记录则停止该条。
+完成草稿后同步飞书附件；按来源 URL 匹配已有记录，缺失或重复记录则停止该条并报告。
 ```
 
 内部流程是：链接规范化与去重 → `yt-dlp` 下载 → 转写与中文字幕 → 可选 Creator Buddy 调研 → 小红书标题/正文/Tag → 剪映草稿 → 可选飞书同步。受平台限制、字幕不清、样式依赖缺失的条目会单独停止，不影响其他已通过检查的链接。
@@ -38,7 +62,7 @@ https://www.instagram.com/p/EXAMPLE_B/
 
 ### 作为 Codex Skill 安装
 
-仓库当前是私有仓库，需要使用有权限的 GitHub 账号：
+克隆仓库到本机 Skill 目录（目标目录不存在时）：
 
 ```bash
 mkdir -p ~/.codex/skills
@@ -50,6 +74,8 @@ git clone git@github.com:Naissy/video-content-pipeline.git ~/.codex/skills/video
 ```text
 使用 $video-content-pipeline，读取当前项目的 project.json，先 dry-run 处理这批视频。
 ```
+
+主 Skill 已能路由到内置选材模块，无需重复安装。如果还想单独用 `$rehab-video-scout` 调用，可将仓库的 `skills/rehab-video-scout` 目录安装到自己的 Skill 目录。已有同名 Skill 时先比较并备份，仅更新这一个目录；不要直接覆盖手工修改。
 
 也可以不安装为 Skill，直接克隆仓库并运行其中的 Python 脚本。
 
@@ -79,6 +105,7 @@ cp ~/.codex/skills/video-content-pipeline/templates/project.template.json projec
 ```json
 {
   "modules": {
+    "video_scout": false,
     "instagram_intake": true,
     "local_intake": true,
     "feishu": false,
@@ -127,7 +154,7 @@ python3 ~/.codex/skills/video-content-pipeline/scripts/run_instagram_pipeline.py
   --execute
 ```
 
-`instagram-urls.txt` 每行一个链接，空行和以 `#` 开头的说明会被忽略。仅接受公开的 `/reel/`、`/p/` 和 `/tv/` 内容链接，不读取浏览器 cookies，也不处理个人主页链接。
+`instagram-urls.txt` 每行一个链接，空行和以 `#` 开头的说明会被忽略。仅接受公开的 `/reel/`、`/reels/`、`/p/` 和 `/tv/` 内容链接，同一 shortcode 跨链接形式去重；不读取浏览器 cookies，也不处理个人主页链接。以上直接链接用法适用于未开启选材模块的项目；开启后必须传入已经核验的 `--selection-manifest`，不能用裸链接绕过点赞门槛。
 
 然后按项目修改这些内容：
 
@@ -434,6 +461,10 @@ python3 ~/.codex/skills/video-content-pipeline/scripts/create_jianying_drafts.py
 ```
 
 每个视频会生成独立草稿，并包含主视频、字幕和作者署名轨道。加密草稿只能作为样式来源证明，不能作为 `JY_STYLE_PROFILE`，也不会被读取、复制或修改。
+
+### 从草稿到可发布成品
+
+需要最终视频时，使用已配置的编辑器导出能力，再核看真实导出文件：画面完整、应有声音不缺失、每组字幕的内容与进出时间吻合、标题与对白分层、字号/位置不遮挡、署名有安全边距、结尾符合账号配置。结果分别标记 `draft_created`、`exported`、`verified`；没有实际导出或未完成质检，就明确保留未完成状态。选材高赞不代表事实正确或已获转载许可，自动发布也不在本流程默认权限内。
 
 ## 10. 常见问题
 

@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from common import add_execution_flags, load_config
 
-CONTENT_TYPES = {"reel", "p", "tv"}
+CONTENT_TYPES = {"reel", "reels", "p", "tv"}
 SHORTCODE = re.compile(r"^[A-Za-z0-9_-]+$")
 MEDIA_SUFFIXES = {".mp4", ".mov", ".m4v", ".webm"}
 
@@ -23,9 +23,11 @@ def normalize_instagram_url(value):
     if parsed.scheme != "https" or host not in {"instagram.com", "www.instagram.com", "m.instagram.com"}:
         raise ValueError("only public https Instagram URLs are supported")
     parts = [part for part in parsed.path.split("/") if part]
-    if len(parts) < 2 or parts[0].casefold() not in CONTENT_TYPES or not SHORTCODE.fullmatch(parts[1]):
+    if len(parts) != 2 or parts[0].casefold() not in CONTENT_TYPES or not SHORTCODE.fullmatch(parts[1]):
         raise ValueError("expected an Instagram /reel/, /p/, or /tv/ content URL")
     kind, shortcode = parts[0].casefold(), parts[1]
+    if kind == "reels":
+        kind = "reel"
     return {
         "source_platform": "instagram",
         "content_type": kind,
@@ -47,12 +49,20 @@ def collect_urls(values, url_file=None):
     unique, duplicates, seen = [], [], set()
     for value in raw:
         item = normalize_instagram_url(value)
-        if item["stable_id"] in seen:
+        if item["shortcode"] in seen:
             duplicates.append(item)
         else:
-            seen.add(item["stable_id"])
+            seen.add(item["shortcode"])
             unique.append(item)
     return unique, duplicates
+
+
+def load_selected_links(config, path):
+    from select_video_candidates import revalidate_selection
+
+    selection = json.loads(Path(path).read_text(encoding="utf-8"))
+    videos = revalidate_selection(config, selection)
+    return [{**normalize_instagram_url(item["source_url"]), "selection_evidence": item} for item in videos]
 
 
 def find_media(output_root, shortcode):
@@ -119,6 +129,7 @@ def main():
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--url", action="append", default=[])
     parser.add_argument("--url-file", type=Path)
+    parser.add_argument("--selection-manifest", type=Path, help="Consume and revalidate an approved scout selection")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--sync-feishu", action="store_true", help="Request optional Feishu upsert after content generation")
     add_execution_flags(parser)
@@ -130,7 +141,14 @@ def main():
     settings = config["instagram"]
     if not settings.get("public_only", True):
         raise RuntimeError("this skill supports public-only Instagram intake")
-    links, duplicates = collect_urls(args.url, args.url_file)
+    if args.selection_manifest:
+        if args.url or args.url_file:
+            raise ValueError("--selection-manifest cannot be mixed with direct URL inputs")
+        links, duplicates = load_selected_links(config, args.selection_manifest), []
+    else:
+        if config["modules"].get("video_scout"):
+            raise ValueError("scout-enabled projects require --selection-manifest; do not bypass the likes gate")
+        links, duplicates = collect_urls(args.url, args.url_file)
     maximum = int(settings.get("max_urls_per_batch", 20))
     if len(links) > maximum:
         raise RuntimeError(f"batch contains {len(links)} unique URLs; configured maximum is {maximum}")

@@ -1,5 +1,5 @@
 interface:
-  display_name: Video Content Pipeline
-  short_description: Configurable, safe short-video batch workflow
-  default_prompt: Use $video-content-pipeline to plan or run this video batch from its project.json configuration.
+  display_name: "Video Content Pipeline"
+  short_description: "从账号定位和高赞选材，到下载、字幕、文案、剪映草稿及成品质检"
+  default_prompt: "使用 $video-content-pipeline，先确认我的账号定位与内容需求，再把核验合格的视频交给生产流程，区分草稿和已验证成品。"
 

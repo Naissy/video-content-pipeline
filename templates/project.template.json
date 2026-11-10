@@ -3,15 +3,34 @@
   "account": {
     "name": "Example Account",
     "slug": "example-account",
-    "tone": "Clear, audience-appropriate, and fact-aware"
+    "tone": "Clear, audience-appropriate, and fact-aware",
+    "positioning": "",
+    "audience": ""
   },
   "modules": {
+    "video_scout": false,
     "instagram_intake": true,
     "local_intake": true,
     "feishu": false,
     "content_analysis": true,
     "xiaohongshu_research": false,
     "jianying": false
+  },
+  "discovery": {
+    "brief_confirmed": false,
+    "source_platform": "instagram",
+    "destination_platform": "xiaohongshu",
+    "content_language": "zh-CN",
+    "target_region": "",
+    "topics": [],
+    "content_types": [],
+    "excluded_topics": [],
+    "reference_urls": [],
+    "lookback_days": 7,
+    "limit": 5,
+    "max_duration_seconds": 30,
+    "max_subtitle_load": "low",
+    "verification_max_age_hours": 24
   },
   "instagram": {
     "downloader": "yt-dlp",

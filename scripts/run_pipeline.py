@@ -16,6 +16,13 @@ def main():
     config = load_config(args.config, resolve_modules=bool(args.execute))
     modules = config["modules"]
     stages = ["validate"]
+    scout_brief_missing = []
+    if modules.get("video_scout"):
+        from select_video_candidates import brief_missing, validate_settings
+        scout_brief_missing = brief_missing(config)
+        if not scout_brief_missing:
+            validate_settings(config)
+        stages.extend(["account_brief", "recent_trend_research", "verified_video_selection"])
     if modules.get("instagram_intake"):
         if "instagram" not in config:
             raise ValueError("instagram configuration is required when modules.instagram_intake is enabled")
@@ -37,6 +44,8 @@ def main():
         "account": config["account"]["name"],
         "enabled_modules": [name for name, enabled in modules.items() if enabled],
         "stages": stages,
+        "scout_brief_missing": scout_brief_missing,
+        "scout_search_ready": bool(modules.get("video_scout")) and not scout_brief_missing,
         "manifest": str(args.manifest.resolve()) if args.manifest else None,
         "note": "This router validates and plans; execute mutating stages with their dedicated scripts.",
     }
